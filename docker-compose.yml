@@ -1,0 +1,91 @@
+version: "3"
+services:
+  postgres:
+    image: postgres
+    volumes:
+      - "~/svz_storage/postgres:/var/lib/postgresql/data"
+    deploy:
+      placement:
+        constraints: [node.role == manager]                                
+      restart_policy:
+        condition: none
+    environment:
+      POSTGRES_PASSWORD: postgres
+    networks:
+      - webnet
+  redis:
+    image: redis
+    volumes:
+      - "~/svz_storage/redis:/data"
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:  
+        condition: none
+    command: redis-server --appendonly yes
+    networks:
+      - webnet
+  elasticsearch:
+    image: elasticsearch:6.4.0
+    volumes:
+      - "~/svz_storage/elasticsearch:/usr/share/elasticsearch/data"
+    deploy:
+      placement:
+        constraints: [node.role == manager]                               
+      restart_policy:
+        condition: none 
+    environment:
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - cluster.routing.allocation.disk.threshold_enabled=false  
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"  
+    networks:
+      - webnet
+  tool:
+    image: tpx86/svz.tool:1
+    deploy:
+      restart_policy:
+        condition: none
+      placement:
+        constraints: [node.role == manager]
+    depends_on:
+      - "redis"
+      - "elasticsearch"
+      - "postgres"
+    networks:
+      - webnet
+  api:
+    image: tpx86/svz:1
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          memory: 500M
+    depends_on:
+      - "redis"
+      - "elasticsearch"
+      - "postgres"
+    ports:
+      - "4000:80"
+    networks:
+      - webnet
+  web:
+    image: tpx86/svz.ui:1
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          memory: 100M
+    depends_on:
+      - "api"
+    ports:
+      - "3000:80"
+    networks:
+      - webnet
+networks:
+  webnet:
+
